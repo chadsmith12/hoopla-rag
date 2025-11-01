@@ -10,7 +10,7 @@ class Movie(TypedDict):
     description: str
 
 
-def search(query: str) -> list[Movie]:
+def search(query: str, num_results: int) -> list[Movie]:
     with open('data/movies.json', 'r') as file:
         data = json.load(file)
 
@@ -20,8 +20,9 @@ def search(query: str) -> list[Movie]:
     for movie in movies:
         if query.lower() in movie['title'].lower():
             results.append(movie)
-
-    return results
+    
+    results.sort(key=lambda movie: movie['id'])
+    return results[:num_results]
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Keyword Search CLI")
@@ -35,8 +36,9 @@ def main() -> None:
     match args.command:
         case "search":
             print(f"Searching for: {args.query}")
-            search_results = search(args.query)
-            print(f"found {len(search_results)} results")
+            search_results = search(args.query, 5)
+            for index, result in enumerate(search_results):
+                print(f"{index + 1}: {result['title']}")
             pass
         case _:
             parser.print_help()
