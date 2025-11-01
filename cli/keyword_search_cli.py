@@ -10,15 +10,28 @@ class Movie(TypedDict):
     title: str
     description: str
 
-def process_text(current: str) -> str:
+def tokenize(query: str) -> list[str]:
+    tokenized = query.split(' ')
+
+    return tokenized
+
+def process_text(current: str) -> list[str]:
     # first make it lower case
-    lowered = current.lower()
+    processed = current.lower()
     
     # create the translation table and remove punctuation
     translate_table = str.maketrans('', '', string.punctuation)
-    removed_punctuation = lowered.translate(translate_table)
+    processed = processed.translate(translate_table)
 
-    return removed_punctuation
+    # tokenize the string now
+    tokenized = tokenize(processed)
+
+    return tokenized 
+
+def matches(query_tokens: list[str], result_tokens: list[str]) -> bool:
+    return any(query_token in result_token 
+               for query_token in query_tokens
+               for result_token in result_tokens)
 
 
 def search(query: str, num_results: int) -> list[Movie]:
@@ -31,7 +44,7 @@ def search(query: str, num_results: int) -> list[Movie]:
     for movie in movies:
         processed_query = process_text(query)
         processed_title = process_text(movie['title'])
-        if processed_query in processed_title:
+        if matches(processed_query, processed_title):
             results.append(movie)
     
     results.sort(key=lambda movie: movie['id'])
