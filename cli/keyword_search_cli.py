@@ -2,12 +2,23 @@
 
 import argparse
 import json
+import string
 from typing import TypedDict
 
 class Movie(TypedDict):
     id: int
     title: str
     description: str
+
+def process_text(current: str) -> str:
+    # first make it lower case
+    lowered = current.lower()
+    
+    # create the translation table and remove punctuation
+    translate_table = str.maketrans('', '', string.punctuation)
+    removed_punctuation = lowered.translate(translate_table)
+
+    return removed_punctuation
 
 
 def search(query: str, num_results: int) -> list[Movie]:
@@ -18,7 +29,9 @@ def search(query: str, num_results: int) -> list[Movie]:
     movies: list[Movie] = data['movies']
     
     for movie in movies:
-        if query.lower() in movie['title'].lower():
+        processed_query = process_text(query)
+        processed_title = process_text(movie['title'])
+        if processed_query in processed_title:
             results.append(movie)
     
     results.sort(key=lambda movie: movie['id'])
