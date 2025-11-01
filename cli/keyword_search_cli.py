@@ -2,14 +2,26 @@
 
 import argparse
 import json
+from typing import TypedDict
 
-def search():
+class Movie(TypedDict):
+    id: int
+    title: str
+    description: str
+
+
+def search(query: str) -> list[Movie]:
     with open('data/movies.json', 'r') as file:
         data = json.load(file)
 
-    movies = data['movies']
+    results: list[Movie] = []
+    movies: list[Movie] = data['movies']
+    
+    for movie in movies:
+        if query.lower() in movie['title'].lower():
+            results.append(movie)
 
-    print(movies)
+    return results
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Keyword Search CLI")
@@ -23,7 +35,8 @@ def main() -> None:
     match args.command:
         case "search":
             print(f"Searching for: {args.query}")
-            search()
+            search_results = search(args.query)
+            print(f"found {len(search_results)} results")
             pass
         case _:
             parser.print_help()
