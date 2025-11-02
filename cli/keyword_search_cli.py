@@ -4,6 +4,7 @@ import argparse
 import json
 import string
 from typing import TypedDict
+from nltk.stem import PorterStemmer
 
 class Movie(TypedDict):
     id: int
@@ -42,7 +43,13 @@ def process_text(current: str, stop_words: list[str]) -> list[str]:
     tokenized = tokenize(processed)
 
     # remove the stop words from the tokenized list
-    return remove_stop_words(tokenized, stop_words)
+    tokenized = remove_stop_words(tokenized, stop_words)
+
+    # put each token to its stem
+    stemmer = PorterStemmer()
+    tokenized = [stemmer.stem(token) for token in tokenized]
+
+    return tokenized
 
 def matches(query_tokens: list[str], result_tokens: list[str]) -> bool:
     return any(query_token in result_token 
