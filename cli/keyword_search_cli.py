@@ -1,10 +1,55 @@
 #!/usr/bin/env python3
 
 import argparse
+from functools import cache
 import json
 import string
+import pickle
 from typing import TypedDict
 from nltk.stem import PorterStemmer
+from collections import defaultdict
+from pathlib import Path
+
+class InvertedIndex:
+    index: defaultdict[str, set[int]] = defaultdict(set)
+    docmap: defaultdict[int, Movie] = defaultdict()
+
+    def __add_document(self: InvertedIndex, doc_id: int, term: str, stop_words: list[str]) -> None:
+        tokenized = process_text(term, stop_words)
+        for token in tokenized:
+            self.index[token].add(doc_id)
+
+    def get_document(self: InvertedIndex, term: str) -> list[int]:
+        doc_ids = self.index[term.lower()]
+
+        return sorted(doc_ids) 
+    
+    def build(self: InvertedIndex) -> None:
+        with open('data/movies.json', 'r') as file:
+            data = json.load(file)
+
+        stop_words = read_stopwords()
+        movies: list[Movie] = data['movies']
+
+        for movie in movies:
+            self.__add_document(movie['id'], f"{movie['title']} {movie['description']}", stop_words)
+            self.docmap[movie['id']] = movie
+
+    def save(self: InvertedIndex) -> None:
+        cache_dir = Path("cache")
+        cache_dir.mkdir(exist_ok=True)
+
+        index_cache_file = f"{cache_dir}/index.pkl"
+        with open(index_cache_file, 'wb') as index_file:
+            pickle.dump(self.index, index_file)
+
+        doc_cache_file = f"{cache_dir}/docmap.pkl"
+        with open(doc_cache_file, 'wb') as doc_file:
+            pickle.dump(self.docmap, doc_file)
+
+
+
+
 
 class Movie(TypedDict):
     id: int
@@ -82,6 +127,8 @@ def main() -> None:
     search_parser = subparsers.add_parser("search", help="Search movies BM25")
     search_parser.add_argument("query", type=str, help="Search query")
 
+    subparsers.add_parser("build", help="Build out the cache")
+
     args = parser.parse_args()
 
     match args.command:
@@ -91,6 +138,12 @@ def main() -> None:
             for index, result in enumerate(search_results):
                 print(f"{index + 1}: {result['title']}")
             pass
+        case "build":
+            inverted_index = InvertedIndex()
+            inverted_index.build()
+            inverted_index.save()
+            docs = sorted(inverted_index.index['merida'])
+            print(f"First document for token 'merida' = {docs[0]}")
         case _:
             parser.print_help()
 
