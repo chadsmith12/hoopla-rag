@@ -3,6 +3,7 @@
 import argparse
 from functools import cache
 import json
+from operator import invert, le
 import string
 import pickle
 from typing import TypedDict
@@ -47,8 +48,21 @@ class InvertedIndex:
         with open(doc_cache_file, 'wb') as doc_file:
             pickle.dump(self.docmap, doc_file)
 
+    def load(self: InvertedIndex) -> None:
+        index_path_path = Path("cache/index.pkl")
 
+        if not index_path_path.exists():
+            raise FileNotFoundError(f"{index_path_path} was not found")
 
+        with open(index_path_path, 'rb') as f:
+            self.index = pickle.load(f)
+
+        doc_cache_file = Path("cache/docmap.pkl")
+        if not doc_cache_file.exists():
+            raise FileNotFoundError(f"{doc_cache_file} was not found")
+
+        with open(doc_cache_file, 'rb') as f:
+            self.docmap = pickle.load(f)
 
 
 class Movie(TypedDict):
@@ -120,6 +134,25 @@ def search(query: str, num_results: int) -> list[Movie]:
     results.sort(key=lambda movie: movie['id'])
     return results[:num_results]
 
+def search_command(query: str, limit: int = 5) -> list[Movie]:
+    index = InvertedIndex()
+    index.load()
+    query_tokens = process_text(query, read_stopwords())
+    seen: set[int] = set()
+    results: list[Movie] = []
+
+    for token in query_tokens:
+        matching_ids = index.get_document(token)
+        for doc_id in matching_ids:
+            if doc_id in seen:
+                continue
+            seen.add(doc_id)
+            document = index.docmap[doc_id]
+            results.append(document)
+            if len(results) >= 5:
+                return results
+    return results
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Keyword Search CLI")
     subparsers = parser.add_subparsers(dest="command", help="Available Commands")
@@ -134,9 +167,29 @@ def main() -> None:
     match args.command:
         case "search":
             print(f"Searching for: {args.query}")
-            search_results = search(args.query, 5)
-            for index, result in enumerate(search_results):
-                print(f"{index + 1}: {result['title']}")
+            results = search_command(args.query)
+            for result in results:
+                print(f"{result['title']} - {result['id']}")
+            # inverted_index = InvertedIndex()
+            # try:
+            #     inverted_index.load()
+            #     query_tokens = process_text(args.query, read_stopwords())
+            #     results: list[Movie] = []
+            #     for query_token in query_tokens:
+            #         found_docs = inverted_index.get_document(query_token)
+            #         for doc_id in found_docs:
+            #             results.append(inverted_index.docmap[doc_id])
+            #             if len(results) >= 5:
+            #                 break
+            #
+            #     for result in results:
+            #         print(f"{result['title']}")
+            # except FileNotFoundError as e:
+            #     print(e)
+
+            # search_results = search(args.query, 5)
+            # for index, result in enumerate(search_results):
+            #     print(f"{index + 1}: {result['title']}")
             pass
         case "build":
             inverted_index = InvertedIndex()
