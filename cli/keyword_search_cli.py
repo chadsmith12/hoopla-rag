@@ -13,7 +13,7 @@ from pathlib import Path
 class InvertedIndex:
     index: defaultdict[str, set[int]] = defaultdict(set)
     docmap: defaultdict[int, Movie] = defaultdict()
-    term_frequencies: defaultdict[int, Counter[str]] = defaultdict()
+    term_frequencies: defaultdict[int, Counter[str]] = defaultdict(Counter)
     stop_words: list[str] = []
 
     def __add_document(self: InvertedIndex, doc_id: int, term: str, stop_words: list[str]) -> None:
@@ -33,7 +33,7 @@ class InvertedIndex:
         if len(tokenized) > 1:
             raise ValueError("too many terms")
 
-        return self.term_frequencies[doc_id][term[0]]
+        return self.term_frequencies[doc_id][tokenized[0]]
     
     def get_idf(self: InvertedIndex, term: str) -> float:
         tokenized = process_text(term, self.stop_words)
@@ -45,6 +45,11 @@ class InvertedIndex:
         term_doc_count = len(self.index[token])
 
         return math.log((doc_count + 1) / (term_doc_count + 1))
+
+    def get_tf_if(self: InvertedIndex, doc_id: int, term: str) -> float:
+        tf = self.get_tf(doc_id, term)
+        idf = self.get_idf(term)
+        return tf * idf
     
     def build(self: InvertedIndex) -> None:
         with open('data/movies.json', 'r') as file:
@@ -201,6 +206,10 @@ def main() -> None:
     idf_parser = subparsers.add_parser("idf", help="Get the inverse document frequence for a term")
     idf_parser.add_argument("term", type=str, help="Search term")
 
+    tfidf_parser = subparsers.add_parser("tfidf", help="Get the tf-idf for a term in a document id")
+    tfidf_parser.add_argument("doc_id", type=int, help="Id of document")
+    tfidf_parser.add_argument("term", type=str, help="Search term")
+
     args = parser.parse_args()
 
     match args.command:
@@ -227,6 +236,12 @@ def main() -> None:
             inverted_index.load()
             idf = inverted_index.get_idf(args.term)
             print(f"Inverse document frequence of '{args.term}': {idf:.2f}")
+            pass
+        case "tfidf":
+            inverted_index = InvertedIndex()
+            inverted_index.load()
+            tf_idf = inverted_index.get_tf_if(args.doc_id, args.term)
+            print(f"TF-IDF score of '{args.term}' in document '{args.doc_id}': {tf_idf:.2f}")
             pass
         case _:
             parser.print_help()
