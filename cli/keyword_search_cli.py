@@ -6,7 +6,7 @@ import json
 from operator import invert, le
 import string
 import pickle
-from typing import TypedDict
+from typing import Counter, TypedDict
 from nltk.stem import PorterStemmer
 from collections import defaultdict
 from pathlib import Path
@@ -14,22 +14,33 @@ from pathlib import Path
 class InvertedIndex:
     index: defaultdict[str, set[int]] = defaultdict(set)
     docmap: defaultdict[int, Movie] = defaultdict()
+    term_frequencies: defaultdict[int, Counter[str]] = defaultdict()
+    stop_words: list[str] = []
 
     def __add_document(self: InvertedIndex, doc_id: int, term: str, stop_words: list[str]) -> None:
         tokenized = process_text(term, stop_words)
+        self.term_frequencies[doc_id] = Counter(tokenized)
         for token in tokenized:
             self.index[token].add(doc_id)
 
     def get_document(self: InvertedIndex, term: str) -> list[int]:
         doc_ids = self.index[term.lower()]
 
-        return sorted(doc_ids) 
+        return sorted(doc_ids)
+
+    def get_tf(self: InvertedIndex, doc_id: int, term: str) -> int:
+        tokenized = process_text(term, self.stop_words)
+        if len(tokenized) > 1:
+            raise Exception("too many terms")
+
+        return self.term_frequencies[doc_id][term]
     
     def build(self: InvertedIndex) -> None:
         with open('data/movies.json', 'r') as file:
             data = json.load(file)
 
         stop_words = read_stopwords()
+        self.stop_words = stop_words
         movies: list[Movie] = data['movies']
 
         for movie in movies:
@@ -48,9 +59,12 @@ class InvertedIndex:
         with open(doc_cache_file, 'wb') as doc_file:
             pickle.dump(self.docmap, doc_file)
 
+        term_cache_file = f"{cache_dir}/term_frequencies.pkl"
+        with open(term_cache_file, 'wb') as term_file:
+            pickle.dump(self.term_frequencies, term_file)
+
     def load(self: InvertedIndex) -> None:
         index_path_path = Path("cache/index.pkl")
-
         if not index_path_path.exists():
             raise FileNotFoundError(f"{index_path_path} was not found")
 
@@ -63,6 +77,13 @@ class InvertedIndex:
 
         with open(doc_cache_file, 'rb') as f:
             self.docmap = pickle.load(f)
+
+        term_cache_file = Path("cache/term_frequencies.pkl")
+        if not term_cache_file.exists():
+            raise FileNotFoundError(f"{term_cache_file} was not found")
+
+        with open(term_cache_file, 'rb') as f:
+            self.term_frequencies = pickle.load(f)
 
 
 class Movie(TypedDict):
@@ -162,6 +183,10 @@ def main() -> None:
 
     subparsers.add_parser("build", help="Build out the cache")
 
+    tf_parser = subparsers.add_parser("tf", help="Get the term frequency for a term in a document id")
+    tf_parser.add_argument("doc_id", type=int, help="Id of document")
+    tf_parser.add_argument("term", type=str, help="Search term")
+
     args = parser.parse_args()
 
     match args.command:
@@ -170,26 +195,6 @@ def main() -> None:
             results = search_command(args.query)
             for result in results:
                 print(f"{result['title']} - {result['id']}")
-            # inverted_index = InvertedIndex()
-            # try:
-            #     inverted_index.load()
-            #     query_tokens = process_text(args.query, read_stopwords())
-            #     results: list[Movie] = []
-            #     for query_token in query_tokens:
-            #         found_docs = inverted_index.get_document(query_token)
-            #         for doc_id in found_docs:
-            #             results.append(inverted_index.docmap[doc_id])
-            #             if len(results) >= 5:
-            #                 break
-            #
-            #     for result in results:
-            #         print(f"{result['title']}")
-            # except FileNotFoundError as e:
-            #     print(e)
-
-            # search_results = search(args.query, 5)
-            # for index, result in enumerate(search_results):
-            #     print(f"{index + 1}: {result['title']}")
             pass
         case "build":
             inverted_index = InvertedIndex()
@@ -197,6 +202,11 @@ def main() -> None:
             inverted_index.save()
             docs = sorted(inverted_index.index['merida'])
             print(f"First document for token 'merida' = {docs[0]}")
+            pass
+        case "tf":
+            inverted_index = InvertedIndex()
+            inverted_index.load()
+            print(f"{inverted_index.get_tf(args.doc_id, args.term)}")
         case _:
             parser.print_help()
 
