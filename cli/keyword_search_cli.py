@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 
 import argparse
-from functools import cache
 import json
-from operator import invert, le
+import math
 import string
 import pickle
 from typing import Counter, TypedDict
@@ -19,9 +18,10 @@ class InvertedIndex:
 
     def __add_document(self: InvertedIndex, doc_id: int, term: str, stop_words: list[str]) -> None:
         tokenized = process_text(term, stop_words)
-        self.term_frequencies[doc_id] = Counter(tokenized)
         for token in tokenized:
             self.index[token].add(doc_id)
+
+        self.term_frequencies[doc_id].update(tokenized)
 
     def get_document(self: InvertedIndex, term: str) -> list[int]:
         doc_ids = self.index[term.lower()]
@@ -31,9 +31,20 @@ class InvertedIndex:
     def get_tf(self: InvertedIndex, doc_id: int, term: str) -> int:
         tokenized = process_text(term, self.stop_words)
         if len(tokenized) > 1:
-            raise Exception("too many terms")
+            raise ValueError("too many terms")
 
-        return self.term_frequencies[doc_id][term]
+        return self.term_frequencies[doc_id][term[0]]
+    
+    def get_idf(self: InvertedIndex, term: str) -> float:
+        tokenized = process_text(term, self.stop_words)
+        if len(tokenized) > 1:
+            raise ValueError("too many terms")
+
+        token = tokenized[0]
+        doc_count = len(self.docmap)
+        term_doc_count = len(self.index[token])
+
+        return math.log((doc_count + 1) / (term_doc_count + 1))
     
     def build(self: InvertedIndex) -> None:
         with open('data/movies.json', 'r') as file:
@@ -187,6 +198,9 @@ def main() -> None:
     tf_parser.add_argument("doc_id", type=int, help="Id of document")
     tf_parser.add_argument("term", type=str, help="Search term")
 
+    idf_parser = subparsers.add_parser("idf", help="Get the inverse document frequence for a term")
+    idf_parser.add_argument("term", type=str, help="Search term")
+
     args = parser.parse_args()
 
     match args.command:
@@ -207,6 +221,13 @@ def main() -> None:
             inverted_index = InvertedIndex()
             inverted_index.load()
             print(f"{inverted_index.get_tf(args.doc_id, args.term)}")
+            pass
+        case "idf":
+            inverted_index = InvertedIndex()
+            inverted_index.load()
+            idf = inverted_index.get_idf(args.term)
+            print(f"Inverse document frequence of '{args.term}': {idf:.2f}")
+            pass
         case _:
             parser.print_help()
 
