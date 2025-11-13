@@ -1,5 +1,6 @@
 import json
 import math
+from operator import index
 import pickle
 import string
 from typing import Counter, TypedDict
@@ -86,6 +87,27 @@ class InvertedIndex:
         tf = self.get_tf(doc_id, term)
         return (tf * (k1 + 1)) / (tf + k1 * length_norm)
 
+    def bm25(self: InvertedIndex, doc_id: int, term: str) -> float:
+        return self.get_bm25_tf(doc_id, term, BM25_K1) * self.get_bm25_idf(term)
+
+    def bm25_search(self: InvertedIndex, query: str, limit: int = 5) -> list[tuple[Movie, float]]:
+        tokenized = process_text(query, self.stop_words)
+        scores: defaultdict[int, float] = defaultdict(float)
+        
+        for doc_id in self.docmap:
+            doc_score = 0.0
+            for token in tokenized:
+                doc_score += self.bm25(doc_id, token)
+            scores[doc_id] = doc_score
+
+        sorted_docs = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+        results: list[tuple[Movie, float]] = []
+        for doc_id, score in sorted_docs[:limit]:
+            movie = self.docmap[doc_id]
+            results.append((movie, score))
+
+        return results
     
     def build(self: InvertedIndex) -> None:
         with open('data/movies.json', 'r') as file:
